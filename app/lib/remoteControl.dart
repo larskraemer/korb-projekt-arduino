@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_joystick/flutter_joystick.dart';
 
 class RemoteControlPage extends StatefulWidget {
   final BluetoothDevice server;
@@ -27,10 +28,6 @@ class _RemoteControlPage extends State<RemoteControlPage> {
 
   List<_Message> messages = List<_Message>.empty(growable: true);
   String _messageBuffer = '';
-
-  final TextEditingController textEditingController =
-      new TextEditingController();
-  final ScrollController listScrollController = new ScrollController();
 
   bool isConnecting = true;
   bool get isConnected => (connection?.isConnected ?? false);
@@ -85,78 +82,26 @@ class _RemoteControlPage extends State<RemoteControlPage> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Row> list = messages.map((_message) {
-      return Row(
-        children: <Widget>[
-          Container(
-            child: Text(
-                (text) {
-                  return text == '/shrug' ? '¯\\_(ツ)_/¯' : text;
-                }(_message.text.trim()),
-                style: TextStyle(color: Colors.white)),
-            padding: EdgeInsets.all(12.0),
-            margin: EdgeInsets.only(bottom: 8.0, left: 8.0, right: 8.0),
-            width: 222.0,
-            decoration: BoxDecoration(
-                color:
-                    _message.whom == clientID ? Colors.blueAccent : Colors.grey,
-                borderRadius: BorderRadius.circular(7.0)),
-          ),
-        ],
-        mainAxisAlignment: _message.whom == clientID
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-      );
-    }).toList();
 
     final serverName = widget.server.name ?? "Unknown";
     return Scaffold(
       appBar: AppBar(
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           title: (isConnecting
               ? Text('Connecting chat to ' + serverName + '...')
               : isConnected
                   ? Text('Live chat with ' + serverName)
                   : Text('Chat log with ' + serverName))),
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Flexible(
-              child: ListView(
-                  padding: const EdgeInsets.all(12.0),
-                  controller: listScrollController,
-                  children: list),
-            ),
-            Row(
-              children: <Widget>[
-                Flexible(
-                  child: Container(
-                    margin: const EdgeInsets.only(left: 16.0),
-                    child: TextField(
-                      style: const TextStyle(fontSize: 15.0),
-                      controller: textEditingController,
-                      decoration: InputDecoration.collapsed(
-                        hintText: isConnecting
-                            ? 'Wait until connected...'
-                            : isConnected
-                                ? 'Type your message...'
-                                : 'Chat got disconnected',
-                        hintStyle: const TextStyle(color: Colors.grey),
-                      ),
-                      enabled: isConnected,
-                    ),
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.all(8.0),
-                  child: IconButton(
-                      icon: const Icon(Icons.send),
-                      onPressed: isConnected
-                          ? () => _sendMessage(textEditingController.text)
-                          : null),
-                ),
-              ],
-            )
-          ],
+        child: Align(
+          alignment: const Alignment(0, 0.8),
+          child: Joystick(listener: (e){
+
+            var x = ((e.x + 1) * 128).floor();
+            var y = ((e.y + 1) * 128).floor();
+            
+            _sendMessage("D${x.toRadixString(16).padLeft(2, '0')}${y.toRadixString(16).padLeft(2, '0')}");
+          }),
         ),
       ),
     );
@@ -213,23 +158,10 @@ class _RemoteControlPage extends State<RemoteControlPage> {
 
   void _sendMessage(String text) async {
     text = text.trim();
-    textEditingController.clear();
-
     if (text.length > 0) {
       try {
-        connection!.output.add(Uint8List.fromList(utf8.encode(text + "\r\n")));
+        connection!.output.add(Uint8List.fromList(utf8.encode(text + "\n")));
         await connection!.output.allSent;
-
-        setState(() {
-          messages.add(_Message(clientID, text));
-        });
-
-        Future.delayed(Duration(milliseconds: 333)).then((_) {
-          listScrollController.animateTo(
-              listScrollController.position.maxScrollExtent,
-              duration: Duration(milliseconds: 333),
-              curve: Curves.easeOut);
-        });
       } catch (e) {
         // Ignore error, but notify state
         setState(() {});

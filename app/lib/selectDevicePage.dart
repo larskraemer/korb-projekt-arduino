@@ -29,6 +29,7 @@ class _SelectDevicePage extends State<SelectDevicePage> {
       _isDiscovering = true;
     });
     _streamSubscription = FlutterBluetoothSerial.instance.startDiscovery().listen((r){
+      print("Found Device ${r.device.address}");
       setState(() {
         if(r.device.bondState.isBonded){
           final index = bondedDevices.indexWhere((element) => element.address == r.device.address);
