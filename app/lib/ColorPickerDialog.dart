@@ -34,7 +34,9 @@ class _ColorPickerDialog extends State<ColorPickerDialog> {
       actions: <Widget>[
         Center(
           child: TextButton(
-            onPressed: (){}, 
+            onPressed: (){
+              Navigator.of(context).pop();
+            }, 
             child: Text("OK")
           ),
         )

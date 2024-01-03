@@ -1,5 +1,5 @@
 {
     "board": "arduino:avr:uno",
     "sketch": "arduino.ino",
-    "port": "/dev/ttyACM0"
+    "port": "/dev/ttyUSB0"
 }

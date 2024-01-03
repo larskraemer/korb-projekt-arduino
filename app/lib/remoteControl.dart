@@ -92,10 +92,10 @@ class _RemoteControlPage extends State<RemoteControlPage> {
       appBar: AppBar(
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           title: (isConnecting
-              ? Text('Connecting chat to ' + serverName + '...')
+              ? Text('Connecting to ' + serverName + '...')
               : isConnected
-                  ? Text('Live chat with ' + serverName)
-                  : Text('Chat log with ' + serverName))),
+                  ? Text('Remote Control for ' + serverName)
+                  : Text('Disconnected from ' + serverName))),
       body: SafeArea(
         child: Stack(
           children: <Widget>[
@@ -110,11 +110,16 @@ class _RemoteControlPage extends State<RemoteControlPage> {
                         onPressed: (){
                           Navigator.of(context).push(
                             CupertinoModalPopupRoute(
-                              builder: (context) => ColorPickerDialog()
+                              builder: (context) => ColorPickerDialog(
+                                onColorChange: (color) {
+                                  var newColor = color.toColor();
+                                  _sendMessage("C${ newColor.value.toRadixString(16).padLeft(8, '0') }");
+                                },  
+                              )
                             )
                           );
                         }, 
-                        child: Text("Test!")
+                        child: const Text("Test!")
                       ),
                     ]
                   ),
@@ -128,9 +133,6 @@ class _RemoteControlPage extends State<RemoteControlPage> {
                 String encodeCoordinate(double val){
                   return ((val + 1.0) * 127).floor().toRadixString(16).padLeft(2, '0');
                 }
-
-                var x = ((e.x + 1) * 127).floor();
-                var y = ((e.y + 1) * 127).floor();
                 
                 _sendMessage("M${encodeCoordinate(e.x)}${encodeCoordinate(e.y)}");
               }),

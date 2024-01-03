@@ -1,58 +1,86 @@
 #include <Adafruit_NeoPixel.h>
 
-#define PIN_BT_STATE PIN7
-#define PIN_BT_RX PIN6
-#define PIN_BT_TX PIN5
-#define PIN_BT_EN PIN4
+constexpr int DRIVE_PINS[] = {
+    3,5,6,9
+};
 
-#define PIN_LEDRING_1 PIN3
-#define PIN_LEDRING_2 PIN2
+constexpr int LED_PIN = 2;
+constexpr int NUM_PIXELS = 99;
 
-#define NUM_PIXELS 12
+auto pix = Adafruit_NeoPixel{NUM_PIXELS, LED_PIN, NEO_GRB + NEO_KHZ800};
 
-Adafruit_NeoPixel pixels1(NUM_PIXELS, PIN_LEDRING_1, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel pixels2(NUM_PIXELS, PIN_LEDRING_2, NEO_GRB + NEO_KHZ800);
-
-void setup(){
-    pinMode(LED_BUILTIN, OUTPUT);
-
-    pixels1.begin();
-    pixels2.begin();
+auto decode_nibble(char c) -> uint8_t {
+    if('0' <= c && c <= '9') return c - '0' + 0x00;
+    if('a' <= c && c <= 'f') return c - 'a' + 0x0a;
+    if('A' <= c && c <= 'F') return c - 'A' + 0x0a;
+    return 0;
 }
 
-auto hsl_to_rgb(int H, float S, float L) -> uint32_t {
-    const auto Hp = (float) H / 60.0f;
-    const auto k = (float) floor(Hp / 2);
-    const auto h = Hp - 2 * k;
+auto decode_hex_byte(const char* str) -> uint8_t {
+    auto high = decode_nibble(*str);
+    auto low = decode_nibble(*(str+1));
+    return (high << 4) | low;
+}
 
-    const auto C = (1 - fabs(2 * L - 1)) * S;
-    const auto X = (1 - fabs(h - 1)) * C;
+struct drive_coords {
+    int x = 0;
+    int y = 0;
+};
 
-    float r,g,b;
+auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
+    // Expect exactly 5 bytes
+    if(len != 5) return {};
+    auto x = decode_hex_byte(command + 1);
+    auto y = decode_hex_byte(command + 3);
 
-    switch((int) Hp) {
-    case 0: r = C; g = X; b = 0; break;
-    case 1: r = X; g = C; b = 0; break;
-    case 2: r = 0; g = C; b = X; break;
-    case 3: r = 0; g = X; b = C; break;
-    case 4: r = X; g = 0; b = C; break;
-    case 5: r = C; g = 0; b = X; break;
+    auto out = drive_coords{};
+
+    out.x = (static_cast<int>(x) - 127) * 2;
+    out.y = (static_cast<int>(y) - 127) * 2;
+    return out;
+}   
+
+void do_serial_drive(const char* command, size_t len) {
+    auto [out_x, out_y] = decode_serial_drive(command, len);
+
+    analogWrite(DRIVE_PINS[0], (out_x > 0) ? +out_x : 0);
+    analogWrite(DRIVE_PINS[1], (out_x < 0) ? -out_x : 0);
+    analogWrite(DRIVE_PINS[2], (out_y > 0) ? +out_y : 0);
+    analogWrite(DRIVE_PINS[3], (out_y < 0) ? -out_y : 0);
+}
+
+void do_serial_color(const char* command, size_t len) {
+    if(len != 9) return;
+    auto a = decode_hex_byte(command + 1);
+    auto r = decode_hex_byte(command + 3);
+    auto g = decode_hex_byte(command + 5);
+    auto b = decode_hex_byte(command + 7);
+
+    for(int i = 0; i < NUM_PIXELS; i++) {
+        pix.setPixelColor(i, Adafruit_NeoPixel::Color(r, g, b));
     }
-
-    const auto m = L - C / 2;
-    r *= 255; r += m;
-    g *= 255; g += m;
-    b *= 255; b += m;
-
-    return Adafruit_NeoPixel::Color(r, g, b);
+    pix.show();
 }
 
-void loop() {
-    static int t = 0;
+void setup(void) {
+    Serial.begin(9600);
+    for(int i = 0; i < (sizeof(DRIVE_PINS)/sizeof(DRIVE_PINS[0])); ++i) {
+        pinMode(DRIVE_PINS[i], OUTPUT);
+    }
+    pix.begin();
+}
 
-    pixels1.setPixelColor(t % NUM_PIXELS, hsl_to_rgb(t, 1.0, 0.5));
-    pixels1.show();
-    ++t;
-    if(t == 11*360) t = 0;
-    delay(100);
+void loop(void) {
+
+    char buffer[64];
+    auto read_bytes = Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(buffer[0]));
+
+    if(read_bytes == 0) return;
+
+    switch (buffer[0])
+    {
+    case 'M': do_serial_drive(buffer, read_bytes); break;
+    case 'C': do_serial_color(buffer, read_bytes); break;
+    default: break;
+    }
 }
