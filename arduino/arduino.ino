@@ -20,13 +20,13 @@ void setup(){
     pixels2.begin();
 }
 
-auto hsl_to_rgb(int H, uint8_t S, uint8_t L) -> uint32_t {
+auto hsl_to_rgb(int H, float S, float L) -> uint32_t {
     const auto Hp = (float) H / 60.0f;
     const auto k = (float) floor(Hp / 2);
     const auto h = Hp - 2 * k;
 
-    const auto C = (1 - abs(2 * L/255.0f - 1)) * S/255.0f;
-    const auto X = (1 - abs(h - 1)) * C;
+    const auto C = (1 - fabs(2 * L - 1)) * S;
+    const auto X = (1 - fabs(h - 1)) * C;
 
     float r,g,b;
 
@@ -39,7 +39,7 @@ auto hsl_to_rgb(int H, uint8_t S, uint8_t L) -> uint32_t {
     case 5: r = C; g = 0; b = X; break;
     }
 
-    const auto m = L - 128 * C;
+    const auto m = L - C / 2;
     r *= 255; r += m;
     g *= 255; g += m;
     b *= 255; b += m;
@@ -50,7 +50,7 @@ auto hsl_to_rgb(int H, uint8_t S, uint8_t L) -> uint32_t {
 void loop() {
     static int t = 0;
 
-    pixels1.setPixelColor(t % NUM_PIXELS, hsl_to_rgb(t, 255, 128));
+    pixels1.setPixelColor(t % NUM_PIXELS, hsl_to_rgb(t, 1.0, 0.5));
     pixels1.show();
     ++t;
     if(t == 11*360) t = 0;

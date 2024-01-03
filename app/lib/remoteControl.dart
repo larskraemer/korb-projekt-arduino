@@ -2,14 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
+import 'package:robo_app/ColorPickerDialog.dart';
 
 class RemoteControlPage extends StatefulWidget {
   final BluetoothDevice server;
 
-  const RemoteControlPage({required this.server});
+  const RemoteControlPage({super.key, required this.server});
 
   @override
   _RemoteControlPage createState() => new _RemoteControlPage();
@@ -33,6 +35,8 @@ class _RemoteControlPage extends State<RemoteControlPage> {
   bool get isConnected => (connection?.isConnected ?? false);
 
   bool isDisconnecting = false;
+
+  HSVColor _color = HSVColor.fromAHSV(1, 0, 1, 0.5);
 
   @override
   void initState() {
@@ -93,15 +97,45 @@ class _RemoteControlPage extends State<RemoteControlPage> {
                   ? Text('Live chat with ' + serverName)
                   : Text('Chat log with ' + serverName))),
       body: SafeArea(
-        child: Align(
-          alignment: const Alignment(0, 0.8),
-          child: Joystick(listener: (e){
+        child: Stack(
+          children: <Widget>[
+            Column(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      ElevatedButton(
+                        onPressed: (){
+                          Navigator.of(context).push(
+                            CupertinoModalPopupRoute(
+                              builder: (context) => ColorPickerDialog()
+                            )
+                          );
+                        }, 
+                        child: Text("Test!")
+                      ),
+                    ]
+                  ),
+                ),
+              ],
+            ),
+            Align(
+              alignment: const Alignment(0, 0.8),
+              child: Joystick(listener: (e){
 
-            var x = ((e.x + 1) * 128).floor();
-            var y = ((e.y + 1) * 128).floor();
-            
-            _sendMessage("D${x.toRadixString(16).padLeft(2, '0')}${y.toRadixString(16).padLeft(2, '0')}");
-          }),
+                String encodeCoordinate(double val){
+                  return ((val + 1.0) * 127).floor().toRadixString(16).padLeft(2, '0');
+                }
+
+                var x = ((e.x + 1) * 127).floor();
+                var y = ((e.y + 1) * 127).floor();
+                
+                _sendMessage("M${encodeCoordinate(e.x)}${encodeCoordinate(e.y)}");
+              }),
+            ),
+          ],
         ),
       ),
     );
@@ -160,6 +194,7 @@ class _RemoteControlPage extends State<RemoteControlPage> {
     text = text.trim();
     if (text.length > 0) {
       try {
+        print(text);
         connection!.output.add(Uint8List.fromList(utf8.encode(text + "\n")));
         await connection!.output.allSent;
       } catch (e) {
