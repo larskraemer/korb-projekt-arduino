@@ -1,11 +1,14 @@
 #include <Adafruit_NeoPixel.h>
 
-constexpr int DRIVE_PINS[] = {
-    3,5,6,9
-};
-
 constexpr int LED_PIN = 2;
-constexpr int NUM_PIXELS = 99;
+constexpr int NUM_PIXELS = 12;
+
+// drive pins
+constexpr int PIN_IA1 = 9;
+constexpr int PIN_IA2 = 5;
+constexpr int PIN_IB1 = 10;
+constexpr int PIN_IB2 = 6;
+
 
 auto pix = Adafruit_NeoPixel{NUM_PIXELS, LED_PIN, NEO_GRB + NEO_KHZ800};
 
@@ -23,8 +26,8 @@ auto decode_hex_byte(const char* str) -> uint8_t {
 }
 
 struct drive_coords {
-    int x = 0;
-    int y = 0;
+    float x = 0;
+    float y = 0;
 };
 
 auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
@@ -35,21 +38,28 @@ auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
 
     auto out = drive_coords{};
 
-    out.x = (static_cast<int>(x) - 127) * 2;
-    out.y = (static_cast<int>(y) - 127) * 2;
+    out.x = (static_cast<float>(x) - 127) / 127.0;
+    out.y = (static_cast<float>(y) - 127) / 127.0;
     return out;
-}   
+}
+
+void set_motor_power(int pinA, int pinB, int power) {
+  analogWrite(pinA, (power > 0) ? +power : 0);
+  analogWrite(pinB, (power < 0) ? -power : 0);
+}
 
 void do_serial_drive(const char* command, size_t len) {
     auto [out_x, out_y] = decode_serial_drive(command, len);
 
-    analogWrite(DRIVE_PINS[0], (out_x > 0) ? +out_x : 0);
-    analogWrite(DRIVE_PINS[1], (out_x < 0) ? -out_x : 0);
-    analogWrite(DRIVE_PINS[2], (out_y > 0) ? +out_y : 0);
-    analogWrite(DRIVE_PINS[3], (out_y < 0) ? -out_y : 0);
+    auto left_motor_power = out_y - out_x;
+    auto right_motor_power = out_y + out_x;
+
+    set_motor_power(5, 6, left_motor_power * 127);
+    set_motor_power(9, 10, right_motor_power * 127);
 }
 
 void do_serial_color(const char* command, size_t len) {
+    // expect exactly 9 bytes
     if(len != 9) return;
     auto a = decode_hex_byte(command + 1);
     auto r = decode_hex_byte(command + 3);
@@ -64,23 +74,26 @@ void do_serial_color(const char* command, size_t len) {
 
 void setup(void) {
     Serial.begin(9600);
-    for(int i = 0; i < (sizeof(DRIVE_PINS)/sizeof(DRIVE_PINS[0])); ++i) {
-        pinMode(DRIVE_PINS[i], OUTPUT);
-    }
+    pinMode(5, OUTPUT);
+    pinMode(6, OUTPUT);
+    pinMode(9, OUTPUT);
+    pinMode(10, OUTPUT);
     pix.begin();
 }
 
 void loop(void) {
-
     char buffer[64];
-    auto read_bytes = Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(buffer[0]));
 
-    if(read_bytes == 0) return;
+    while(Serial.available() > 0) {
+        auto read_bytes = Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(buffer[0]));
 
-    switch (buffer[0])
-    {
-    case 'M': do_serial_drive(buffer, read_bytes); break;
-    case 'C': do_serial_color(buffer, read_bytes); break;
-    default: break;
+        if(read_bytes == 0) return;
+
+        switch (buffer[0])
+        {
+        case 'M': do_serial_drive(buffer, read_bytes); break;
+        case 'C': do_serial_color(buffer, read_bytes); break;
+        default: break;
+        }
     }
 }
