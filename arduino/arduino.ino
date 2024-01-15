@@ -2,6 +2,7 @@
 
 constexpr int LED_PIN = 2;
 constexpr int NUM_PIXELS = 12;
+constexpr int PIN_BEEP = 11;
 
 // drive pins
 constexpr int PIN_IA1 = 9;
@@ -48,11 +49,23 @@ void set_motor_power(int pinA, int pinB, int power) {
   analogWrite(pinB, (power < 0) ? -power : 0);
 }
 
+void do_beep(int pin, bool enable) {
+    static int next_change = millis();
+    static bool current_state = false;
+
+    auto current_time = millis();
+    if(current_time > next_change) {
+        next_change = current_time;
+        current_state = !current_state;
+        tone(pin, 220);
+    }
+}
+
 void do_serial_drive(const char* command, size_t len) {
     auto [out_x, out_y] = decode_serial_drive(command, len);
 
-    auto left_motor_power = out_y - out_x;
-    auto right_motor_power = out_y + out_x;
+    auto left_motor_power = out_x - out_y;
+    auto right_motor_power = out_x + out_y;
 
     set_motor_power(5, 6, left_motor_power * 127);
     set_motor_power(9, 10, right_motor_power * 127);

@@ -131,7 +131,7 @@ class _RemoteControlPage extends State<RemoteControlPage> {
               child: Joystick(listener: (e){
 
                 String encodeCoordinate(double val){
-                  return ((val + 1.0) * 127).floor().toRadixString(16).padLeft(2, '0');
+                  return ((-val + 1.0) * 127).floor().toRadixString(16).padLeft(2, '0');
                 }
                 
                 _sendMessage("M${encodeCoordinate(e.x)}${encodeCoordinate(e.y)}");
