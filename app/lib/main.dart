@@ -67,8 +67,6 @@ class _MyHomePageState extends State<MyHomePage> {
       List<BluetoothDiscoveryResult>.empty(growable: true);
   bool isDiscovering = false;
 
-  String _address = "";
-  String _name = "";
 
   @override
   void dispose() {
@@ -94,14 +92,12 @@ class _MyHomePageState extends State<MyHomePage> {
     }).then((_) {
       FlutterBluetoothSerial.instance.address.then((address) {
         setState(() {
-          _address = address!;
         });
       });
     });
 
     FlutterBluetoothSerial.instance.name.then((value) {
       setState(() {
-        _name = value!;
       });
     });
 
