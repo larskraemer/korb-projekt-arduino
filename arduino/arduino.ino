@@ -10,6 +10,9 @@ constexpr int PIN_IA2 = 5;
 constexpr int PIN_IB1 = 10;
 constexpr int PIN_IB2 = 6;
 
+// Sensor YL-70 Pins
+constexpr int SENSOR_LEFT = A0;
+constexpr int SENSOR_RIGHT = A1;
 
 auto pix = Adafruit_NeoPixel{NUM_PIXELS, LED_PIN, NEO_GRB + NEO_KHZ800};
 
@@ -30,6 +33,16 @@ struct drive_coords {
     float x = 0;
     float y = 0;
 };
+
+// YL-70 Code
+struct SensorReadings {
+    bool left;
+    bool right;
+};
+
+SensorReadings readLineSensors() {
+    return {digitalRead(SENSOR_LEFT), digitalRead(SENSOR_RIGHT)};
+}
 
 auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
     // Expect exactly 5 bytes
@@ -85,6 +98,26 @@ void do_serial_color(const char* command, size_t len) {
     pix.show();
 }
 
+void do_followLine(const SensorReadings& readings) {
+    if (!readings.left && !readings.right) {
+        // Both sensors are off the line: move forward
+        set_motor_power(PIN_IA1, PIN_IA2, 100);
+        set_motor_power(PIN_IB1, PIN_IB2, 100);
+    } else if (readings.left && !readings.right) {
+        // Left sensor is on the line: turn left
+        set_motor_power(PIN_IA1, PIN_IA2, 50);
+        set_motor_power(PIN_IB1, PIN_IB2, 100);
+    } else if (!readings.left && readings.right) {
+        // Right sensor is on the line: turn right
+        set_motor_power(PIN_IA1, PIN_IA2, 100);
+        set_motor_power(PIN_IB1, PIN_IB2, 50);
+    } else {
+        // Both sensors are on the line: stop or move slowly forward
+        set_motor_power(PIN_IA1, PIN_IA2, 0);
+        set_motor_power(PIN_IB1, PIN_IB2, 0);
+    }
+}
+
 void setup(void) {
     Serial.begin(9600);
     pinMode(5, OUTPUT);
@@ -92,6 +125,10 @@ void setup(void) {
     pinMode(9, OUTPUT);
     pinMode(10, OUTPUT);
     pix.begin();
+
+    // setup YL-70 Sensor Modul
+    pinMode(SENSOR_LEFT, INPUT);
+    pinMode(SENSOR_RIGHT, INPUT);
 }
 
 void loop(void) {
@@ -106,6 +143,7 @@ void loop(void) {
         {
         case 'M': do_serial_drive(buffer, read_bytes); break;
         case 'C': do_serial_color(buffer, read_bytes); break;
+        case 'L': {auto readings = readLineSensors(); do_followLine(readings); break;}
         default: break;
         }
     }
