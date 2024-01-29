@@ -6,9 +6,9 @@ constexpr int PIN_BEEP = 11;
 
 // drive pins
 constexpr int PIN_IA1 = 9;
-constexpr int PIN_IA2 = 5;
+constexpr int PIN_IA2 = 6;
 constexpr int PIN_IB1 = 10;
-constexpr int PIN_IB2 = 6;
+constexpr int PIN_IB2 = 5;
 
 // Sensor YL-70 Pins
 constexpr int SENSOR_LEFT = A0;
@@ -41,7 +41,13 @@ struct SensorReadings {
 };
 
 SensorReadings readLineSensors() {
-    return {digitalRead(SENSOR_LEFT), digitalRead(SENSOR_RIGHT)};
+    auto left_val = analogRead(SENSOR_LEFT);
+    auto right_val = analogRead(SENSOR_RIGHT);
+
+    Serial.println(left_val);
+    Serial.println(right_val);
+
+    return {left_val > 127, right_val > 127};
 }
 
 auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
@@ -58,8 +64,16 @@ auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
 }
 
 void set_motor_power(int pinA, int pinB, int power) {
-  analogWrite(pinA, (power > 0) ? +power : 0);
-  analogWrite(pinB, (power < 0) ? -power : 0);
+  if(power > 0) analogWrite(pinA, (power > 0) ? +power : 0);
+  else analogWrite(pinB, (power < 0) ? -power : 0);
+}
+
+void set_left_motor(int power) {
+  set_motor_power(PIN_IA2, PIN_IB2, power);
+}
+
+void set_right_motor(int power) {
+  set_motor_power(PIN_IA1, PIN_IB1, power);
 }
 
 void do_beep(int pin, bool enable) {
@@ -99,24 +113,32 @@ void do_serial_color(const char* command, size_t len) {
 }
 
 void do_followLine(const SensorReadings& readings) {
+    // Define a steering factor for smoother turns
+    const int steering_factor = 30;  // Adjust this value based on testing
+
     if (!readings.left && !readings.right) {
         // Both sensors are off the line: move forward
-        set_motor_power(PIN_IA1, PIN_IA2, 100);
-        set_motor_power(PIN_IB1, PIN_IB2, 100);
+        Serial.println("Moving forward");
+        set_motor_power(PIN_IB1,PIN_IA1, 100);
+        set_motor_power(PIN_IA2, PIN_IB2, 100);
     } else if (readings.left && !readings.right) {
-        // Left sensor is on the line: turn left
-        set_motor_power(PIN_IA1, PIN_IA2, 50);
-        set_motor_power(PIN_IB1, PIN_IB2, 100);
+        // Left sensor is on the line: turn left more gently
+        Serial.println("steering right");
+        set_motor_power(PIN_IB1,PIN_IA1, 100 - steering_factor);
+        set_motor_power(PIN_IA2, PIN_IB2, 100);
     } else if (!readings.left && readings.right) {
-        // Right sensor is on the line: turn right
-        set_motor_power(PIN_IA1, PIN_IA2, 100);
-        set_motor_power(PIN_IB1, PIN_IB2, 50);
+        // Right sensor is on the line: turn right more gently
+        Serial.println("steering left");
+        set_motor_power(PIN_IB1,PIN_IA1, 100);
+        set_motor_power(PIN_IA2, PIN_IB2, 100 - steering_factor);
     } else {
         // Both sensors are on the line: stop or move slowly forward
-        set_motor_power(PIN_IA1, PIN_IA2, 0);
-        set_motor_power(PIN_IB1, PIN_IB2, 0);
+        Serial.println("das ist nicht");
+        set_motor_power(PIN_IB1,PIN_IA1, 0);
+        set_motor_power(PIN_IA2, PIN_IB2, 0);
     }
 }
+
 
 void setup(void) {
     Serial.begin(9600);
@@ -132,19 +154,27 @@ void setup(void) {
 }
 
 void loop(void) {
-    char buffer[64];
+    auto readings = readLineSensors();
+    //do_followLine(readings);
 
-    while(Serial.available() > 0) {
-        auto read_bytes = Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(buffer[0]));
+    set_left_motor(100);
+    set_right_motor(100);
 
-        if(read_bytes == 0) return;
 
-        switch (buffer[0])
-        {
-        case 'M': do_serial_drive(buffer, read_bytes); break;
-        case 'C': do_serial_color(buffer, read_bytes); break;
-        case 'L': {auto readings = readLineSensors(); do_followLine(readings); break;}
-        default: break;
-        }
-    }
+    
+// '    char buffer[64];
+
+//     while(Serial.available() > 0) {
+//         auto read_bytes = Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(buffer[0]));
+
+//         if(read_bytes == 0) return;
+
+//         switch (buffer[0])
+//         {
+//         case 'M': do_serial_drive(buffer, read_bytes); break;
+//         case 'C': do_serial_color(buffer, read_bytes); break;
+//         case 'L': {auto readings = readLineSensors(); do_followLine(readings); break;}
+//         default: break;
+//         }
+//     }'
 }
