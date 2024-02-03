@@ -1,0 +1,219 @@
+#include <Adafruit_NeoPixel.h>
+
+constexpr int LED_PIN = 2;
+constexpr int NUM_PIXELS = 12;
+constexpr int PIN_BEEP = 11;
+
+// drive pins
+constexpr int PIN_IA1 = 9;
+constexpr int PIN_IA2 = 6;
+constexpr int PIN_IB1 = 10;
+constexpr int PIN_IB2 = 5;
+
+// Sensor YL-70 Pins
+constexpr int SENSOR_LEFT = A0;
+constexpr int SENSOR_RIGHT = A1;
+
+template<class T, size_t N>
+struct vec {
+    T comps[N];
+};
+
+template<class T>
+struct vec<T, 2>
+{
+    union{
+        struct { T x; T y; };
+        struct { T left; T right; };
+    };
+};
+
+using vec2 = vec<float, 2>;
+
+#define clamp(v, vmin, vmax) max(min((v), (vmax)), (vmin))
+
+struct motor_driver {
+    int pinA;
+    int pinB;
+
+    void begin() {
+        pinMode(pinA, OUTPUT);
+        pinMode(pinB, OUTPUT);
+    }
+
+    // Power is an int between -255 and +255
+    void set_power(int power) {
+        analogWrite(pinA, (power > 0) ? +power : 0);
+        analogWrite(pinB, (power < 0) ? -power : 0);
+    }
+};
+
+auto left_motor = motor_driver{5, 6};
+auto right_motor = motor_driver{10, 9};
+
+
+auto pix = Adafruit_NeoPixel{NUM_PIXELS, LED_PIN, NEO_GRB + NEO_KHZ800};
+
+auto decode_nibble(char c) -> uint8_t {
+    if('0' <= c && c <= '9') return c - '0' + 0x00;
+    if('a' <= c && c <= 'f') return c - 'a' + 0x0a;
+    if('A' <= c && c <= 'F') return c - 'A' + 0x0a;
+    return 0;
+}
+
+auto decode_hex_byte(const char* str) -> uint8_t {
+    auto high = decode_nibble(*str);
+    auto low = decode_nibble(*(str+1));
+    return (high << 4) | low;
+}
+
+struct drive_coords {
+    float x = 0;
+    float y = 0;
+};
+
+// YL-70 Code
+struct SensorReadings {
+    bool left;
+    bool right;
+};
+
+SensorReadings readLineSensors() {
+    auto left_val = analogRead(SENSOR_LEFT);
+    auto right_val = analogRead(SENSOR_RIGHT);
+
+    Serial.println(left_val);
+    Serial.println(right_val);
+
+    return {left_val > 127, right_val > 127};
+}
+
+auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
+    // Expect exactly 5 bytes
+    if(len != 5) return {};
+    auto x = decode_hex_byte(command + 1);
+    auto y = decode_hex_byte(command + 3);
+
+    auto out = drive_coords{};
+
+    out.x = (static_cast<float>(x) - 127) / 127.0;
+    out.y = (static_cast<float>(y) - 127) / 127.0;
+    return out;
+}
+
+auto calculate_motor_power(vec2 d) -> vec2 {
+    return {
+        clamp(d.y + d.x, -1, 1),
+        clamp(d.y - d.x, -1, 1)
+    };
+}
+
+void do_serial_drive(const char* command, size_t len) {
+    auto [out_x, out_y] = decode_serial_drive(command, len);
+    auto power = calculate_motor_power({out_x, out_y});
+
+    left_motor.set_power(power.left * 255);
+    right_motor.set_power(power.right * 255);
+}
+
+void do_followLine(const SensorReadings& readings) {
+    // Define a steering factor for smoother turns
+    const int steering_factor = 30;  // Adjust this value based on testing
+
+    if (!readings.left && !readings.right) {
+        // Both sensors are off the line: move forward
+        Serial.println("Moving forward");
+        left_motor.set_power(100);
+        right_motor.set_power(100);
+    } else if (readings.left && !readings.right) {
+        // Left sensor is on the line: turn left more gently
+        Serial.println("steering right");
+        left_motor.set_power(100 - steering_factor);
+        right_motor.set_power(100);
+    } else if (!readings.left && readings.right) {
+        // Right sensor is on the line: turn right more gently
+        Serial.println("steering left");
+        left_motor.set_power(100);
+        right_motor.set_power(100 - steering_factor);
+    } else {
+        // Both sensors are on the line: stop or move slowly forward
+        Serial.println("das ist nicht");
+        left_motor.set_power(0);
+        right_motor.set_power(0);
+    }
+}
+
+
+void setup(void) {
+    left_motor.begin();
+    right_motor.begin();
+
+    Serial.begin(9600);
+    pix.begin();
+
+    // setup YL-70 Sensor Modul
+    pinMode(SENSOR_LEFT, INPUT);
+    pinMode(SENSOR_RIGHT, INPUT);
+}
+
+struct command {
+    char type;
+    char padding[15];
+};
+
+struct move_command {
+    char type;
+    uint8_t x;
+    uint8_t y;
+};
+
+struct color_command {
+    char type;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
+
+bool read_command(struct command* cmd) {
+    static char buffer[16];
+    static int size = 0;
+
+    while(true){
+        auto c = Serial.read();
+        if(c == -1) return false;
+        if(c == '\n'){
+            memcpy(cmd, buffer, size);
+            return true;
+        }
+        buffer[size++] = c;
+    }
+}
+
+void handle_move(struct move_command& cmd) {
+    auto power = calculate_motor_power({
+        static_cast<float>(cmd.x) / 127 - 1, 
+        static_cast<float>(cmd.y) / 127 - 1});
+
+    left_motor.set_power(power.left * 255);
+    right_motor.set_power(power.right * 255);
+    
+}
+
+void handle_color(struct color_command& cmd) {
+    for(int i = 0; i < NUM_PIXELS; i++) {
+        pix.setPixelColor(i, Adafruit_NeoPixel::Color(cmd.r, cmd.g, cmd.b));
+    }
+    pix.show();
+}
+
+void loop(void) {
+    // Do the serial communication
+    command cmd;
+    while(read_command(&cmd)) {
+        switch(cmd.type) {
+        case 'M': handle_move(*reinterpret_cast<move_command*>(&cmd)); break;
+        case 'C': handle_color(*reinterpret_cast<color_command*>(&cmd)); break;
+        }
+    }
+
+}

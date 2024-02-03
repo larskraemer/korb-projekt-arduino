@@ -23,8 +23,11 @@ class _Message {
 
   _Message(this.whom, this.text);
 }
+ 
 
-class _RemoteControlPage extends State<RemoteControlPage> {
+class _RemoteControlPage extends State<RemoteControlPage> 
+  with SingleTickerProviderStateMixin
+{
   static final clientID = 0;
   BluetoothConnection? connection;
 
@@ -38,9 +41,25 @@ class _RemoteControlPage extends State<RemoteControlPage> {
 
   HSVColor _color = HSVColor.fromAHSV(1, 0, 1, 0.5);
 
+  TabController? _controller;
+
   @override
   void initState() {
     super.initState();
+
+    _controller = TabController(
+      length: 2,
+      vsync: this
+    );
+
+    _controller!.addListener(() { 
+      if(_controller!.index == 0) {
+        _sendMessage("SENDNUDES");
+      }
+      if(_controller!.index == 1) {
+        _sendMessage("SAVEMEFROMDESPAIR");
+      }
+    });
 
     BluetoothConnection.toAddress(widget.server.address).then((_connection) {
       print('Connected to the device');
@@ -86,61 +105,108 @@ class _RemoteControlPage extends State<RemoteControlPage> {
 
   @override
   Widget build(BuildContext context) {
-
     final serverName = widget.server.name ?? "Unknown";
-    return Scaffold(
-      appBar: AppBar(
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-          title: (isConnecting
-              ? Text('Connecting to ' + serverName + '...')
-              : isConnected
-                  ? Text('Remote Control for ' + serverName)
-                  : Text('Disconnected from ' + serverName))),
-      body: SafeArea(
-        child: Stack(
-          children: <Widget>[
-            Column(
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      ElevatedButton(
-                        onPressed: (){
-                          Navigator.of(context).push(
-                            CupertinoModalPopupRoute(
-                              builder: (context) => ColorPickerDialog(
-                                onColorChange: (color) {
-                                  var newColor = color.toColor();
-                                  _sendMessage("C${ newColor.value.toRadixString(16).padLeft(8, '0') }");
-                                },  
-                              )
-                            )
-                          );
-                        }, 
-                        child: const Text("Test!")
-                      ),
-                    ]
-                  ),
+    return DefaultTabController(
+        length: 2,
+        child: Scaffold(
+            appBar: AppBar(
+                //backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+                title: (isConnecting
+               ? Text('waiting for ' + serverName + ' to beep beep')
+               : isConnected
+                   ? Text('beep beeping ' + serverName)
+                   : Text('no longer beep bepping ' + serverName)),
+                bottom: TabBar(
+                  controller: _controller!,
+                  tabs: [
+                    Tab(text: "Fernsteuerung"),
+                    Tab(text: "Linefollower"), 
+                ]
+                )),
+            body: TabBarView(
+              controller: _controller,
+              children: [
+                SafeArea(
+                  child: Stack(children: <Widget>[
+                    Align(
+                      alignment: const Alignment(0, 0.8),
+                      child: Joystick(listener: (e) {
+                        //_sendMoveMessage(0, -1);
+                        _sendMoveMessage(e.x, e.y);
+                      }),
+                    ),
+                    Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ElevatedButton(onPressed: (){
+                              _sendMessage("RESET,BRO");
+                            }, child: const Text("Reset"))
+                          ],
+                        )
+                      ],
+                    )
+                  ],)
                 ),
-              ],
-            ),
-            Align(
-              alignment: const Alignment(0, 0.8),
-              child: Joystick(listener: (e){
-
-                String encodeCoordinate(double val){
-                  return ((-val + 1.0) * 127).floor().toRadixString(16).padLeft(2, '0');
-                }
                 
-                _sendMessage("M${encodeCoordinate(e.x)}${encodeCoordinate(e.y)}");
-              }),
-            ),
-          ],
-        ),
-      ),
-    );
+                const Text("Test")
+              ],
+            )));
+
+    // Scaffold(
+    //   appBar: AppBar(
+    //       backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+    //       title: (isConnecting
+    //           ? Text('Connecting to ' + serverName + '...')
+    //           : isConnected
+    //               ? Text('Remote Control for ' + serverName)
+    //               : Text('Disconnected from ' + serverName))),
+    //   body: DefaultTabController(
+    //     length: 1,
+    //     child: Scaffold
+    //   )
+
+    //   SafeArea(
+    //     child: Stack(
+    //       children: <Widget>[
+    //         Column(
+    //           children: <Widget>[
+    //             Padding(
+    //               padding: const EdgeInsets.symmetric(vertical: 20),
+    //               child: Row(
+    //                 mainAxisAlignment: MainAxisAlignment.center,
+    //                 children: <Widget>[
+    //                   ElevatedButton(
+    //                     onPressed: (){
+    //                       Navigator.of(context).push(
+    //                         CupertinoModalPopupRoute(
+    //                           builder: (context) => ColorPickerDialog(
+    //                             onColorChange: (color) {
+    //                               var newColor = color.toColor();
+    //                               _sendMessage("C${ newColor.value.toRadixString(16).padLeft(8, '0') }");
+    //                             },
+    //                           )
+    //                         )
+    //                       );
+    //                     },
+    //                     child: const Text("Test!")
+    //                   ),
+    //                 ]
+    //               ),
+    //             ),
+    //           ],
+    //         ),
+    //         Align(
+    //           alignment: const Alignment(0, 0.8),
+    //           child: Joystick(listener: (e){
+    //             _sendMoveMessage(e.x, e.y);
+    //           }),
+    //         ),
+    //       ],
+    //     ),
+    //   ),
+    // );
   }
 
   void _onDataReceived(Uint8List data) {
@@ -190,6 +256,14 @@ class _RemoteControlPage extends State<RemoteControlPage> {
               0, _messageBuffer.length - backspacesCounter)
           : _messageBuffer + dataString);
     }
+  }
+
+  void _sendMoveMessage(double x, double y) async {
+    String encodeCoordinate(double val) {
+      return ((-val + 1.0) * 127).floor().toRadixString(16).padLeft(2, '0');
+    }
+
+    _sendMessage("M${encodeCoordinate(x)}${encodeCoordinate(y)}");
   }
 
   void _sendMessage(String text) async {

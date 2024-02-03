@@ -33,11 +33,11 @@ class MyApp extends StatelessWidget {
         //
         // This works for code too, not just values: Most code changes can be
         // tested with just a hot reload.
-        colorSchemeSeed:const Color.fromARGB(255, 255, 0, 0),
+        colorSchemeSeed:Color.fromARGB(255, 0, 247, 255),
         brightness: Brightness.dark,
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'beep beep'),
     );
   }
 }
