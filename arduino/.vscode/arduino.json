@@ -1,5 +1,5 @@
 {
     "board": "arduino:avr:uno",
-    "sketch": "drive_arduino/drive_arduino.ino",
-    "port": "/dev/ttyACM0"
+    "sketch": "drive_arduino\\drive_arduino.ino",
+    "port": "COM7"
 }

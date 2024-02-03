@@ -1,19 +1,16 @@
 #include <Adafruit_NeoPixel.h>
 
+
 constexpr int LED_PIN1 = 2;
 constexpr int LED_PIN2 = 3;
+
 constexpr int NUM_PIXELS = 12;
 constexpr int PIN_BEEP = 11;
-
-// drive pins
-constexpr int PIN_IA1 = 9;
-constexpr int PIN_IA2 = 6;
-constexpr int PIN_IB1 = 10;
-constexpr int PIN_IB2 = 5;
 
 // Sensor YL-70 Pins
 constexpr int SENSOR_LEFT = A0;
 constexpr int SENSOR_RIGHT = A1;
+
 
 // 
 constexpr int PIN_DISTANCE_SENSOR_ECHO = 7;
@@ -97,6 +94,7 @@ struct SensorReadings {
 };
 
 SensorReadings readLineSensors() {
+
     auto left_val = analogRead(SENSOR_LEFT);
     auto right_val = analogRead(SENSOR_RIGHT);
 
@@ -113,6 +111,7 @@ auto calculate_motor_power(vec2 d) -> vec2 {
         clamp(d.y + d.x, -1, 1),
         clamp(d.y - d.x, -1, 1)
     };
+
 }
 
 auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
@@ -128,10 +127,12 @@ auto decode_serial_drive(const char* command, size_t len) -> drive_coords {
     return out;
 }
 
+
 void do_serial_drive(const char* command, size_t len) {
     auto [out_x, out_y] = decode_serial_drive(command, len);
 
     motor_power = calculate_motor_power({ out_x, out_y });
+
 }
 
 void do_serial_color(const char* command, size_t len) {
@@ -209,6 +210,7 @@ void setup(void) {
     right_motor.begin();
     pix1.begin();
     pix2.begin();
+
 
     // setup YL-70 Sensor Modul
     pinMode(SENSOR_LEFT, INPUT);
@@ -331,4 +333,5 @@ void loop(void) {
         do_followLine(readLineSensors());
     } break;
     };
+
 }
